@@ -49,21 +49,37 @@ def ask_gemini(prompt: str, api_key: str, timeout: int = 30) -> str:
             cand = candidates[0]
             # try nested paths
             if isinstance(cand, dict):
-                # common field names
-                for key in ("output", "text", "content", "response"):
-                    if key in cand:
-                        value = cand[key]
-                        if isinstance(value, str):
-                            return value
-                        if isinstance(value, list):
-                            texts = []
-                            for item in value:
-                                if isinstance(item, dict) and "text" in item:
-                                    texts.append(item["text"])
-                                elif isinstance(item, str):
-                                    texts.append(item)
-                            if texts:
-                                return "".join(texts)
+                # Direct textual fields
+                for key in ("output", "text", "response"):
+                    if key in cand and isinstance(cand[key], str):
+                        return cand[key]
+
+                # content -> parts -> text (common REST shape)
+                content = cand.get("content") or cand.get("output") or cand.get("response")
+                if isinstance(content, dict):
+                    parts = content.get("parts") or content.get("text")
+                    if isinstance(parts, list) and parts:
+                        texts = []
+                        for item in parts:
+                            if isinstance(item, dict) and "text" in item:
+                                texts.append(item["text"])
+                            elif isinstance(item, str):
+                                texts.append(item)
+                        if texts:
+                            return "".join(texts)
+
+                # content may itself be a list of parts
+                if isinstance(cand.get("content"), list):
+                    texts = []
+                    for item in cand["content"]:
+                        if isinstance(item, dict) and "parts" in item and isinstance(item["parts"], list):
+                            for p in item["parts"]:
+                                if isinstance(p, dict) and "text" in p:
+                                    texts.append(p["text"])
+                        elif isinstance(item, str):
+                            texts.append(item)
+                    if texts:
+                        return "".join(texts)
 
         # fallback to top-level string fields
         for key in ("output", "text", "result", "response"):
