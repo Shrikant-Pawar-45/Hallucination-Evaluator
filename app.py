@@ -2,7 +2,13 @@ import os
 import streamlit as st
 import pandas as pd
 import wikipediaapi
-import google.generativeai as genai
+try:
+    import google.generativeai as genai
+    genai_import_error = None
+except Exception as e:
+    genai = None
+    genai_import_error = str(e)
+
 from hallucination_utils import verify_factual
 import re
 
@@ -31,12 +37,29 @@ if not gemini_api_key:
     st.info("Please set GEMINI_API_KEY as an environment variable or add it to Streamlit secrets to proceed.")
     st.stop()
 
-try:
-    genai.configure(api_key=gemini_api_key)
-    model = genai.GenerativeModel("gemini-2.0-flash")  # Using a stable, commonly available model
-except Exception as e:
-    st.error(f"Failed to configure Gemini API: {e}")
-    st.stop()
+if genai is None:
+    st.error(
+        "The `google.generativeai` package is not installed on this environment.\n"
+        "Streamlit Cloud instances may not include this SDK by default.\n"
+        "Options: install the SDK in the environment, or use the demo mode below."
+    )
+
+    st.markdown("### Demo mode (no Gemini SDK)")
+    st.info(
+        "Enable demo mode to run the app with canned responses. This is useful for demos or when the Gemini SDK is unavailable."
+    )
+    demo_mode = st.checkbox("Run in demo mode (no external API)")
+    if not demo_mode:
+        st.stop()
+    else:
+        model = None
+else:
+    try:
+        genai.configure(api_key=gemini_api_key)
+        model = genai.GenerativeModel("gemini-2.0-flash")  # Using a stable, commonly available model
+    except Exception as e:
+        st.error(f"Failed to configure Gemini API: {e}")
+        st.stop()
 
 
 # -------------------- WIKIPEDIA SETUP --------------------
@@ -112,8 +135,29 @@ if st.button("🚀 Run Gemini Tests & Auto-Verify", type="primary"):
         progress_bar = st.progress(0, "Starting tests...")
         for i, prompt in enumerate(prompts):
             try:
-                resp = model.generate_content(prompt)
-                answer = resp.text.strip()
+                if genai is None or model is None:
+                    # Demo response (deterministic simple fallback)
+                    # Provide a slightly informative canned answer for common prompts
+                    lower = prompt.lower()
+                    if "penicillin" in lower:
+                        answer = "Penicillin was discovered by Alexander Fleming."
+                    elif "photosynthesis" in lower:
+                        answer = "Photosynthesis is the process plants use to convert light into chemical energy."
+                    elif "%" in lower:
+                        # quick math demo
+                        import re
+                        nums = re.findall(r"\d+", prompt)
+                        if len(nums) >= 2:
+                            pct = float(nums[0])
+                            total = float(nums[1])
+                            answer = f"{pct/100*total}"
+                        else:
+                            answer = "Demo: calculation result not found."
+                    else:
+                        answer = f"Demo answer for: {prompt}"
+                else:
+                    resp = model.generate_content(prompt)
+                    answer = resp.text.strip()
             except Exception as e:
                 answer = f"Error: {e}"
 
