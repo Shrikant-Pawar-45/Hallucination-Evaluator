@@ -10,6 +10,72 @@ import re
 genai = None
 model = None
 
+# Try to import requests for REST-based calls to Gemini; if it's not present
+# we'll fall back to demo mode and show an install hint.
+try:
+    import requests
+except Exception:
+    requests = None
+
+
+def ask_gemini(prompt: str, api_key: str, timeout: int = 30) -> str:
+    """Call the Gemini REST `generateContent` endpoint using an API key.
+
+    This is a lightweight fallback to avoid requiring the `google.generativeai`
+    SDK. The exact response shape may vary; we try a few heuristics to extract
+    the generated text.
+    """
+    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+    headers = {
+        "Content-Type": "application/json",
+        "X-goog-api-key": api_key,
+    }
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}]
+    }
+
+    try:
+        resp = requests.post(url, headers=headers, json=payload, timeout=timeout)
+        resp.raise_for_status()
+    except Exception as e:
+        return f"Error calling Gemini REST API: {e}"
+
+    try:
+        j = resp.json()
+    except Exception:
+        return resp.text
+
+    # Heuristic extraction of text from common response shapes
+    if isinstance(j, dict):
+        # candidates -> content -> parts -> text
+        candidates = j.get("candidates") or j.get("outputs")
+        if isinstance(candidates, list) and candidates:
+            cand = candidates[0]
+            # try nested paths
+            if isinstance(cand, dict):
+                # common field names
+                for key in ("output", "text", "content", "response"):
+                    if key in cand:
+                        value = cand[key]
+                        if isinstance(value, str):
+                            return value
+                        if isinstance(value, list):
+                            texts = []
+                            for item in value:
+                                if isinstance(item, dict) and "text" in item:
+                                    texts.append(item["text"])
+                                elif isinstance(item, str):
+                                    texts.append(item)
+                            if texts:
+                                return "".join(texts)
+
+        # fallback to top-level string fields
+        for key in ("output", "text", "result", "response"):
+            if key in j and isinstance(j[key], str):
+                return j[key]
+
+    return str(j)
+
 # -------------------- PAGE CONFIG --------------------
 st.set_page_config(page_title=" Gemini Hallucination Evaluator", layout="wide",page_icon="🧠")
 st.title("🤖 Gemini Hallucination Evaluator")
