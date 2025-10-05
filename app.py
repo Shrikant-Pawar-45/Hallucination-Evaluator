@@ -2,15 +2,13 @@ import os
 import streamlit as st
 import pandas as pd
 import wikipediaapi
-try:
-    import google.generativeai as genai
-    genai_import_error = None
-except Exception as e:
-    genai = None
-    genai_import_error = str(e)
-
-from hallucination_utils import verify_factual
 import re
+
+# If the google.generativeai SDK is unavailable we will run in demo mode.
+# Do NOT import the SDK here to avoid import-time failures in environments
+# that don't have it installed (for example Streamlit Cloud instances).
+genai = None
+model = None
 
 # -------------------- PAGE CONFIG --------------------
 st.set_page_config(page_title=" Gemini Hallucination Evaluator", layout="wide",page_icon="🧠")
@@ -30,8 +28,13 @@ if "csv_data" not in st.session_state:
 
 
 # -------------------- GEMINI API --------------------
-# Load API key from environment variable or Streamlit secrets
-gemini_api_key = os.environ.get("GEMINI_API_KEY") or st.secrets.get("GEMINI_API_KEY")
+# Load API key: prefer Streamlit secrets, fallback to environment variable
+try:
+    API_KEY = st.secrets["GEMINI_API_KEY"]
+except Exception:
+    API_KEY = None
+
+gemini_api_key = API_KEY or os.environ.get("GEMINI_API_KEY")
 
 if not gemini_api_key:
     st.info("Please set GEMINI_API_KEY as an environment variable or add it to Streamlit secrets to proceed.")
