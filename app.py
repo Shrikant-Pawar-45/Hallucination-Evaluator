@@ -4,11 +4,7 @@ import pandas as pd
 import wikipediaapi
 import re
 
-# If the google.generativeai SDK is unavailable we will run in demo mode.
-# Do NOT import the SDK here to avoid import-time failures in environments
-# that don't have it installed (for example Streamlit Cloud instances).
-genai = None
-model = None
+# We rely on a REST fallback (requests) for Gemini calls or demo mode.
 
 # Try to import requests for REST-based calls to Gemini; if it's not present
 # we'll fall back to demo mode and show an install hint.
@@ -106,29 +102,23 @@ if not gemini_api_key:
     st.info("Please set GEMINI_API_KEY as an environment variable or add it to Streamlit secrets to proceed.")
     st.stop()
 
-if genai is None:
+# Decide whether to use REST calls (requests) or run in demo mode.
+if requests is None:
     st.error(
-        "The `google.generativeai` package is not installed on this environment.\n"
-        "Streamlit Cloud instances may not include this SDK by default.\n"
-        "Options: install the SDK in the environment, or use the demo mode below."
+        "The `requests` package is not installed on this environment.\n"
+        "Without `requests` the app cannot call Gemini via REST.\n"
+        "Options: install `requests` in the environment, or use demo mode below."
     )
-
-    st.markdown("### Demo mode (no Gemini SDK)")
+    st.markdown("### Demo mode (no external HTTP client)")
     st.info(
-        "Enable demo mode to run the app with canned responses. This is useful for demos or when the Gemini SDK is unavailable."
+        "Enable demo mode to run the app with canned responses. This is useful for demos or when network/requests are unavailable."
     )
-    demo_mode = st.checkbox("Run in demo mode (no external API)")
+    demo_mode = st.checkbox("Run in demo mode (no external API)", value=True)
     if not demo_mode:
         st.stop()
-    else:
-        model = None
+    use_rest = False
 else:
-    try:
-        genai.configure(api_key=gemini_api_key)
-        model = genai.GenerativeModel("gemini-2.0-flash")  # Using a stable, commonly available model
-    except Exception as e:
-        st.error(f"Failed to configure Gemini API: {e}")
-        st.stop()
+    use_rest = True
 
 
 # -------------------- WIKIPEDIA SETUP --------------------
@@ -204,7 +194,7 @@ if st.button("🚀 Run Gemini Tests & Auto-Verify", type="primary"):
         progress_bar = st.progress(0, "Starting tests...")
         for i, prompt in enumerate(prompts):
             try:
-                if genai is None or model is None:
+                if not use_rest:
                     # Demo response (deterministic simple fallback)
                     # Provide a slightly informative canned answer for common prompts
                     lower = prompt.lower()
@@ -225,8 +215,8 @@ if st.button("🚀 Run Gemini Tests & Auto-Verify", type="primary"):
                     else:
                         answer = f"Demo answer for: {prompt}"
                 else:
-                    resp = model.generate_content(prompt)
-                    answer = resp.text.strip()
+                    # Use REST helper to call Gemini
+                    answer = ask_gemini(prompt, gemini_api_key)
             except Exception as e:
                 answer = f"Error: {e}"
 
