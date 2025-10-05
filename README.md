@@ -12,6 +12,10 @@ Requirements
 - Python 3.11+ (3.12 tested in CI)
 - See `requirements.txt` for full dependency list.
 
+Screenshot of the app
+
+![Screenshot](images/image.png)
+
 Quickstart (local)
 1. Create and activate a virtual environment (PowerShell):
 
@@ -57,12 +61,6 @@ pytest -q
 
 Continuous Integration
 - This repository includes a GitHub Actions workflow in `.github/workflows/python-app.yml` that installs dependencies and runs tests on pushes and PRs to `main`.
-
-Deployment (Streamlit Cloud)
-1. Push this repository to GitHub.
-2. In Streamlit Cloud, create a new app and link the repo and branch.
-3. Add `GEMINI_API_KEY` value in the app's Secrets UI.
-4. Deploy. Streamlit will run `streamlit run app.py` by default.
 
 Further improvements
 - Replace the simple Wikipedia heuristic with a retrieval + semantic matching approach (embeddings) for more robust verification.
